@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS user_roles CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS notices CASCADE;
+DROP TABLE IF EXISTS inquiries CASCADE;
 
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
@@ -126,7 +127,7 @@ CREATE TABLE payments (
 CREATE TABLE notifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id),
-    type VARCHAR(20) NOT NULL CHECK (type IN ('PAYMENT_REQUEST', 'ORDER_COMPLETED', 'POINT_CHARGED')),
+    type VARCHAR(20) NOT NULL CHECK (type IN ('PAYMENT_REQUEST', 'ORDER_COMPLETED', 'POINT_CHARGED', 'NOTICE_CREATED')),
     title VARCHAR(100) NOT NULL,
     body TEXT NOT NULL,
     data TEXT,
@@ -142,6 +143,17 @@ CREATE TABLE notices (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     author_id BIGINT REFERENCES users(id) ON DELETE SET NULL
+);
+
+
+CREATE TABLE inquiries (
+    id BIGSERIAL PRIMARY KEY,
+    category VARCHAR(20) NOT NULL CHECK (category IN ('PAYMENT', 'ACCOUNT', 'BOOTH', 'TECHNICAL', 'OTHER')), 
+    title VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_users_dauth_id ON users(dauth_id);
@@ -183,6 +195,10 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE is_read = 
 CREATE INDEX idx_notices_is_pinned ON notices(is_pinned);
 CREATE INDEX idx_notices_created_at ON notices(created_at);
 CREATE INDEX idx_notices_author_id ON notices(author_id) WHERE author_id IS NOT NULL;
+
+CREATE INDEX idx_inquiries_user_id ON inquiries(user_id);
+CREATE INDEX idx_inquiries_category ON inquiries(category);
+CREATE INDEX idx_inquiries_created_at ON inquiries(created_at);
 
 CREATE OR REPLACE FUNCTION generate_booth_order_number()
 RETURNS TRIGGER AS $$
