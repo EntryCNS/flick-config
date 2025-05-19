@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: flick
       POSTGRES_USER: flick
       POSTGRES_PASSWORD: pqlamz!!
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
     networks:
       - flick_network
     ports:
