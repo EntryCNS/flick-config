@@ -1,26 +1,32 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16
     container_name: postgres
     environment:
-      POSTGRES_DB: flick
-      POSTGRES_USER: flick
-      POSTGRES_PASSWORD: pqlamz!!
-      TZ: Asia/Seoul
-      PGTZ: Asia/Seoul
+      - POSTGRES_DB=flick
+      - POSTGRES_USER=flick
+      - POSTGRES_PASSWORD=pqlamz!!
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
     networks:
       - flick_network
     ports:
-      - "5432:5432"
+      - 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flick"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    networks:
+      - flick_network
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
@@ -30,44 +36,6 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    healthcheck:
-      test: ["CMD-SHELL", "echo srvr | nc localhost 2181 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    container_name: kafka
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    networks:
-      - flick_network
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    healthcheck:
-      test:
-        ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  place-redis:
-    image: redis:latest
-    container_name: place-redis
-    networks:
-      - flick_network
-    volumes:
-      - place_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
   service-registry:
     image: jbj338033/flick-service-registry:latest
@@ -76,59 +44,6 @@ services:
       - flick_network
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8761/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  api-gateway:
-    image: jbj338033/flick-api-gateway:latest
-    container_name: api-gateway
-    networks:
-      - flick_network
-    ports:
-      - "8080:8080"
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-    depends_on:
-      service-registry:
-        condition: service_healthy
-    restart: on-failure
-
-  core-service:
-    image: jbj338033/flick-core-service:latest
-    container_name: core-service
-    networks:
-      - flick_network
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      service-registry:
-        condition: service_healthy
-    restart: on-failure
-
-  place-service:
-    image: jbj338033/flick-place-service:latest
-    container_name: place-service
-    networks:
-      - flick_network
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      place-redis:
-        condition: service_healthy
-      service-registry:
-        condition: service_healthy
-    restart: on-failure
 
   notification-service:
     image: jbj338033/flick-notification-service:latest
@@ -137,16 +52,58 @@ services:
       - flick_network
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+
+  core-service:
+    image: jbj338033/flick-core-service:latest
+    container_name: core-service
+    networks:
+      - flick_network
+    ports:
+      - 8081:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
     depends_on:
-      service-registry:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    restart: on-failure
+      - postgres
+      - kafka
+      - service-registry
+
+  place-service:
+    image: jbj338033/flick-place-service:latest
+    container_name: place-service
+    networks:
+      - flick_network
+    ports:
+      - 8082:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    depends_on:
+      - postgres
+      - kafka
+      - place-redis
+      - service-registry
+
+  place-redis:
+    image: redis:latest
+    container_name: place-redis
+    networks:
+      - flick_network
+
+  admin-service:
+    image: jbj338033/flick-admin-service:latest
+    container_name: admin-service
+    networks:
+      - flick_network
+    ports:
+      - 8083:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    depends_on:
+      - postgres
+      - kafka
+      - service-registry
 
 volumes:
   postgres_data:
-  place_redis_data:
 
 networks:
   flick_network:
